@@ -127,7 +127,7 @@ Add to `~/.config/omarchy/extensions/omarchy-menu.jsonc` (see
 | Symptom | Cause / fix |
 |---|---|
 | `No valid secrets` on connect | Password not set to ask. Press **Re-apply always-ask password**, then Connect. |
-| Import says connection exists | A profile with that name is already imported. Either **adopt it** (the panel lists known VPN profiles when none is managed) or remove/rename first. Note NetworkManager allows duplicate names — afterwards always refer to profiles unambiguously; the plugin detects imports by UUID. |
+| Import says connection exists | A profile with that name is already imported. Either **adopt it** (the panel lists known VPN profiles when none is managed) or remove/rename first. NetworkManager allows duplicate names — the plugin pins the managed profile by UUID (preferring the active, else most recently used entry) and warns when duplicates exist. |
 | `NetworkManager unavailable` | `systemctl status NetworkManager` — the daemon is down. |
 | OpenVPN support missing | Install via the panel button (`omarchy-pkg-add openvpn networkmanager-openvpn`). |
 | `.ovpn` won't import | File unreadable/invalid, or referenced certs/keys missing. Re-export from the Firebox. |
