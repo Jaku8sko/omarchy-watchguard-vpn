@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "id": "user-name.watchguard-vpn",
+  "name": "WatchGuard VPN",
+  "version": "0.1.0",
+  "author": "user-name",
+  "license": "MIT",
+  "description": "Import and manage OpenVPN profiles (WatchGuard Firebox SSL VPN with AuthPoint MFA) through NetworkManager. Password is always requested, never stored.",
+  "kinds": ["service", "bar-widget"],
+  "entryPoints": {
+    "service": "Service.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "WatchGuard VPN",
+    "description": "OpenVPN profile import, username editing, connect/disconnect via NetworkManager.",
+    "category": "Network",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "connectionName": "",
+      "refreshIntervalSec": 5
+    },
+    "schema": [
+      {
+        "key": "connectionName",
+        "type": "string",
+        "label": "VPN connection name",
+        "defaultValue": "",
+        "description": "NetworkManager connection managed by this widget. Set via Import; editable here."
+      },
+      {
+        "key": "refreshIntervalSec",
+        "type": "integer",
+        "label": "Status refresh interval (seconds)",
+        "min": 2,
+        "max": 60,
+        "step": 1,
+        "defaultValue": 5
+      }
+    ]
+  }
+}

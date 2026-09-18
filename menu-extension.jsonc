@@ -1,0 +1,23 @@
+// Ready-made snippet for ~/.config/omarchy/extensions/omarchy-menu.jsonc.
+// Merge these keys into that file (it is JSONC: comments and trailing commas
+// are allowed). They summon this plugin's panel through the standard shell
+// IPC surface — no core Omarchy files are touched.
+{
+  // Submenu under Setup → Network.
+  "setup.network.watchguard-vpn": { "icon": "󰖂", "label": "WatchGuard VPN" },
+  "setup.network.watchguard-vpn.open": {
+    "icon": "󰖂",
+    "label": "Open VPN Panel",
+    "action": "omarchy-shell shell toggle user-name.watchguard-vpn '{}'"
+  },
+  "setup.network.watchguard-vpn.connect": {
+    "icon": "󰈹",
+    "label": "Connect",
+    "action": "omarchy-shell user-name.watchguard-vpn connect"
+  },
+  "setup.network.watchguard-vpn.disconnect": {
+    "icon": "󰒃",
+    "label": "Disconnect",
+    "action": "omarchy-shell user-name.watchguard-vpn disconnect"
+  },
+}
