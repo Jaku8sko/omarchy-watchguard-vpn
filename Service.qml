@@ -26,7 +26,8 @@ Item {
   // names can never steer a modify/show/delete at the wrong profile.
   property string connectionName: ""
   property string connectionUuid: ""
-  property bool duplicateWarning: false  property bool installed: false        // openvpn + networkmanager-openvpn present
+  property bool duplicateWarning: false
+  property bool installed: false        // openvpn + networkmanager-openvpn present
   property bool nmAvailable: true
   property string vpnState: "missing"   // missing | disconnected | connecting | connected | failed
   property string username: ""
