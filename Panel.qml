@@ -257,6 +257,15 @@ Panel {
               font.pixelSize: Style.font.caption
               wrapMode: Text.WordWrap
             }
+            Text {
+              visible: service && service.duplicateWarning
+              width: parent.width
+              text: "Several profiles share this name — the most recently used one is managed (pinned by ID). Consider removing the spare."
+              color: bar ? bar.urgent : Color.urgent
+              font.family: root.contentFontFamily
+              font.pixelSize: Style.font.caption
+              wrapMode: Text.WordWrap
+            }
 
             RowLayout {
               width: parent.width

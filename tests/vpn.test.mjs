@@ -21,7 +21,8 @@ const EXPORTS = [
   "connectTerminalCommand", "connectTerminalArgv",
   "parseConnectionList", "detectImported", "parseImportStdout",
   "parseVpnShow", "hasPasswordFlags2", "settingsPick",
-  "stateFor", "classifyError", "errorMessage", "elideStatus",
+  "stateFor", "stateForUuid", "findByName", "resolveTarget",
+  "classifyError", "errorMessage", "elideStatus",
 ];
 const Vpn = {};
 new Function("exports", `${src}\nfor (const k of ${JSON.stringify(EXPORTS)}) exports[k] = eval(k)`)(Vpn);
@@ -141,6 +142,44 @@ group("no password persistence");
     t(b + " carries no password/secret literal", !!m && !/passw|secret/i.test(body.replace(/password-flags/g, "").replace(/PASSWORD_FLAGS_VALUE/g, "")));
   }
   t("no key material paths hardcoded", !/client-ca\.pem|client-key\.pem/i.test(src));
+}
+
+group("duplicate names resolve to one UUID");
+{
+  const rows = "client:uuid-old:vpn:100\nclient:uuid-new:vpn:200\nRanczo:uuid-w:wifi:300\n";
+  const list = Vpn.parseConnectionList(rows);
+  t("four-field parse keeps timestamps",
+    list[0].timestamp === 100 && list[1].timestamp === 200);
+  t("three-field lines still parse with timestamp 0",
+    Vpn.parseConnectionList("a:u1:vpn")[0].timestamp === 0);
+  t("findByName returns both", Vpn.findByName(list, "client").length === 2);
+  t("findByName misses nothing else", Vpn.findByName(list, "nope").length === 0);
+
+  // Active match wins even when older.
+  var r = Vpn.resolveTarget(list, ["uuid-old"], "client");
+  t("active entry preferred", r.entry.uuid === "uuid-old" && r.duplicates === true);
+  // Otherwise newest timestamp wins.
+  r = Vpn.resolveTarget(list, [], "client");
+  t("newest timestamp preferred", r.entry.uuid === "uuid-new" && r.duplicates === true);
+  // Single match: no duplicate flag.
+  r = Vpn.resolveTarget(list, [], "Ranczo");
+  t("single match not flagged", r.entry.uuid === "uuid-w" && r.duplicates === false);
+  // No match.
+  r = Vpn.resolveTarget(list, [], "ghost");
+  t("no match yields null entry", r.entry === null && r.duplicates === false);
+
+  // UUID-pinned state derivation.
+  t("uuid connected", Vpn.stateForUuid(true, "uuid-new", ["uuid-new"], "") === "connected");
+  t("uuid not confused by namesake", Vpn.stateForUuid(true, "uuid-old", ["uuid-new"], "") === "disconnected");
+  t("uuid missing without target", Vpn.stateForUuid(false, "", [], "") === "missing");
+  t("uuid failed on error", Vpn.stateForUuid(true, "u", [], "failed") === "failed");
+
+  // Ops accept UUIDs positionally (unambiguous under duplicates).
+  t("show by uuid", Vpn.showVpnArgv("uuid-new").includes("uuid-new"));
+  t("modify by uuid", Vpn.setUsernameArgv("uuid-new", "user")[3] === "uuid-new");
+  t("flags by uuid", Vpn.setPasswordFlagsArgv("uuid-new")[3] === "uuid-new");
+  const upCmd = Vpn.connectTerminalCommand("uuid-new");
+  t("connect addresses uuid", upCmd.includes("uuid-new") && upCmd.includes("--ask"));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

@@ -122,6 +122,7 @@ BarWidget {
         "state: " + root.vpnState,
         "username: " + (root.service.username || "(unset)"),
         "always-ask password: " + (root.service.hasPasswordFlags2 ? "yes" : "no")]
+      if (root.service.duplicateWarning) lines.push("note: duplicate profile names — managing by ID")
       if (root.service.lastError !== "") lines.push("error: " + root.service.lastError)
       return lines.join("\n")
     }

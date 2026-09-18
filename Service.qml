@@ -21,8 +21,12 @@ Item {
   property var settings: ({})
 
   // --- managed profile + live state ---
+  // connectionName is the display/adopt key; connectionUuid is what every
+  // nmcli operation actually addresses, resolved fresh each poll so duplicate
+  // names can never steer a modify/show/delete at the wrong profile.
   property string connectionName: ""
-  property bool installed: false        // openvpn + networkmanager-openvpn present
+  property string connectionUuid: ""
+  property bool duplicateWarning: false  property bool installed: false        // openvpn + networkmanager-openvpn present
   property bool nmAvailable: true
   property string vpnState: "missing"   // missing | disconnected | connecting | connected | failed
   property string username: ""
@@ -69,7 +73,7 @@ Item {
     var msg = Vpn.errorMessage(key)
     if (msg === "") msg = Vpn.errorMessage("failed")
     lastError = detail ? msg + " (" + elide(detail) + ")" : msg
-    if (connectionName !== "" && (activeNames.indexOf(connectionName) === -1))
+    if (connectionUuid !== "" && activeUuids.indexOf(connectionUuid) === -1)
       vpnState = "failed"
   }
 
@@ -80,7 +84,8 @@ Item {
 
   // --- polling ---
 
-  property var activeNames: []
+  property var allConnections: []   // every NM connection (name/uuid/type/timestamp)
+  property var activeUuids: []
   property var _preImport: []
 
   function refresh() {
@@ -104,27 +109,47 @@ Item {
   }
 
   function refreshVpnDetail() {
-    if (connectionName === "" || showProc.running) {
+    resolveTarget()
+    if (connectionUuid === "" || showProc.running) {
+      // A settled, non-empty inventory without our name means the profile is
+      // really gone (not merely mid-poll: both listers are idle here).
+      if (Vpn.isValidConnectionName(connectionName) && allConnections.length > 0
+          && !listProc.running && !activeProc.running)
+        fail("not-found", "")
       updateState()
       return
     }
-    showProc.command = Vpn.showVpnArgv(connectionName)
+    showProc.command = Vpn.showVpnArgv(connectionUuid)
     showProc.running = true
   }
 
+  // Re-pin connectionUuid from the latest inventory. Prefers the active
+  // match, else the most recently used — never a blind first match.
+  function resolveTarget() {
+    if (!Vpn.isValidConnectionName(connectionName)) {
+      connectionUuid = ""
+      duplicateWarning = false
+      return
+    }
+    var r = Vpn.resolveTarget(allConnections, activeUuids, connectionName)
+    duplicateWarning = r.duplicates
+    connectionUuid = r.entry ? r.entry.uuid : ""
+  }
+
   function updateState() {
-    vpnState = Vpn.stateFor(connectionName, activeNames,
+    var hasTarget = Vpn.isValidConnectionName(connectionName)
+    vpnState = Vpn.stateForUuid(hasTarget, connectionUuid, activeUuids,
       lastErrorKey === "" ? "" : (lastErrorKey === "connecting" ? "connecting" : lastErrorKey))
     // A clean poll with no error clears a stale "failed".
     if (lastErrorKey !== "" && lastErrorKey !== "connecting"
-        && activeNames.indexOf(connectionName) !== -1) {
+        && connectionUuid !== "" && activeUuids.indexOf(connectionUuid) !== -1) {
       lastErrorKey = ""
       lastError = ""
       vpnState = "connected"
     }
-    if (lastErrorKey === "" && connectionName !== "")
-      vpnState = activeNames.indexOf(connectionName) !== -1 ? "connected" : "disconnected"
-    if (connectionName === "") vpnState = "missing"
+    if (lastErrorKey === "" && hasTarget)
+      vpnState = (connectionUuid !== "" && activeUuids.indexOf(connectionUuid) !== -1) ? "connected" : "disconnected"
+    if (!hasTarget) vpnState = "missing"
     refreshing = false
   }
 
@@ -168,46 +193,47 @@ Item {
 
   function setUsername(name) {
     var user = String(name || "").trim()
-    if (connectionName === "" || !Vpn.isValidUsername(user) || modifyProc.running) return
+    if (connectionUuid === "" || !Vpn.isValidUsername(user) || modifyProc.running) return
     clearError()
     actionStatus = "Saving username…"
     modifyProc.pendingUser = user
-    modifyProc.command = Vpn.setUsernameArgv(connectionName, user)
+    modifyProc.command = Vpn.setUsernameArgv(connectionUuid, user)
     modifyProc.running = true
   }
 
   function applyPasswordFlags() {
-    if (connectionName === "" || flagsProc.running) return
-    flagsProc.command = Vpn.setPasswordFlagsArgv(connectionName)
+    if (connectionUuid === "" || flagsProc.running) return
+    flagsProc.command = Vpn.setPasswordFlagsArgv(connectionUuid)
     flagsProc.running = true
   }
 
   function connect() {
-    if (connectionName === "") return
+    if (connectionUuid === "") return
     clearError()
     lastErrorKey = "connecting"
     vpnState = "connecting"
     actionStatus = "Opening terminal for password + AuthPoint MFA…"
     // Foreground terminal: user types the VPN password, then "p" for the
     // AuthPoint push, then approves on their phone. The plugin never sees
-    // either secret.
-    Quickshell.execDetached(Vpn.connectTerminalArgv(connectionName))
+    // either secret. Addressed by UUID so duplicate names cannot connect
+    // the wrong profile.
+    Quickshell.execDetached(Vpn.connectTerminalArgv(connectionUuid))
     connectWatchdog.restart()
   }
 
   function disconnect() {
-    if (connectionName === "" || downProc.running) return
+    if (connectionUuid === "" || downProc.running) return
     clearError()
     actionStatus = "Disconnecting…"
-    downProc.command = Vpn.downArgv(connectionName)
+    downProc.command = Vpn.downArgv(connectionUuid)
     downProc.running = true
   }
 
   function removeProfile() {
-    if (connectionName === "" || deleteProc.running) return
+    if (connectionUuid === "" || deleteProc.running) return
     clearError()
     actionStatus = "Removing VPN profile…"
-    deleteProc.command = Vpn.deleteArgv(connectionName)
+    deleteProc.command = Vpn.deleteArgv(connectionUuid)
     deleteProc.running = true
   }
 
@@ -215,6 +241,9 @@ Item {
     var clean = String(name || "").trim()
     if (!Vpn.isValidConnectionName(clean)) return
     connectionName = clean
+    var r = Vpn.resolveTarget(allConnections, activeUuids, clean)
+    if (r.entry) connectionUuid = r.entry.uuid
+    duplicateWarning = r.duplicates
     clearError()
     connectionChanged(clean)
     refreshVpnDetail()
@@ -222,11 +251,12 @@ Item {
 
   // --- derived data ---
 
-  property var knownConnections: []   // [{name, uuid, type}] vpn entries
+  property var knownConnections: []   // [{name, uuid, type, timestamp}] vpn entries
   property int knownVpnCount: 0
 
   function ingestList(raw) {
     var all = Vpn.parseConnectionList(raw)
+    root.allConnections = all
     var vpns = []
     for (var i = 0; i < all.length; i++)
       if (all[i].type === "vpn") vpns.push(all[i])
@@ -311,13 +341,16 @@ Item {
         return
       }
       if (listProc.mode === "post-import") {
-        var after = Vpn.parseConnectionList(out)
+        root.ingestList(out)
+        var after = root.allConnections
         var found = Vpn.detectImported(root._preImport, after)
         var viaStdout = Vpn.parseImportStdout(importProc.captured)
-        var name = found ? found.name : (viaStdout ? viaStdout.name : "")
-        if (name !== "") {
-          root.connectionName = name
-          root.connectionChanged(name)
+        var pick = found ? found : viaStdout
+        if (pick && pick.name !== "") {
+          root.connectionName = pick.name
+          root.connectionUuid = pick.uuid || ""
+          root.duplicateWarning = false
+          root.connectionChanged(pick.name)
           root.actionStatus = "Profile imported. Applying always-ask password…"
           root.applyPasswordFlags()
         } else {
@@ -360,9 +393,9 @@ Item {
     onExited: function(code) {
       if (code === 0) {
         var all = Vpn.parseConnectionList(String(activeOut.text || ""))
-        var names = []
-        for (var i = 0; i < all.length; i++) names.push(all[i].name)
-        root.activeNames = names
+        var uuids = []
+        for (var i = 0; i < all.length; i++) uuids.push(all[i].uuid)
+        root.activeUuids = uuids
       }
       root.refreshVpnDetail()
     }
@@ -385,7 +418,7 @@ Item {
       root.username = parsed.username
       root.hasPasswordFlags2 = Vpn.hasPasswordFlags2(parsed.data)
       root.vpnDataKeys = Object.keys(parsed.data).length
-      if (!root.hasPasswordFlags2 && root.connectionName !== "")
+      if (!root.hasPasswordFlags2 && root.connectionUuid !== "")
         root.fail("no-valid-secrets", "")
       else if (root.lastErrorKey === "no-valid-secrets") {
         root.lastErrorKey = ""
@@ -458,8 +491,10 @@ Item {
         return
       }
       root.connectionName = ""
+      root.connectionUuid = ""
       root.username = ""
       root.hasPasswordFlags2 = false
+      root.duplicateWarning = false
       root.actionStatus = "VPN profile removed."
       root.connectionChanged("")
       root.statusClear.restart()

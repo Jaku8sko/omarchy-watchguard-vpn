@@ -61,11 +61,14 @@ function showVpnArgv(connection) {
 }
 
 function listArgv() {
-  return ["nmcli", "-t", "-f", "NAME,UUID,TYPE", "connection", "show"];
+  // TIMESTAMP lets resolveTarget prefer the most recently used profile when
+  // several share one name. nmcli -t separates fields with ":"; names may
+  // contain ":" so parseConnectionList splits from the right.
+  return ["nmcli", "-t", "-f", "NAME,UUID,TYPE,TIMESTAMP", "connection", "show"];
 }
 
 function activeArgv() {
-  return ["nmcli", "-t", "-f", "NAME,UUID,TYPE", "connection", "show", "--active"];
+  return ["nmcli", "-t", "-f", "NAME,UUID,TYPE,TIMESTAMP", "connection", "show", "--active"];
 }
 
 function downArgv(connection) {
@@ -93,8 +96,9 @@ function connectTerminalArgv(connection) {
 // --- parsers ---
 
 function parseConnectionList(raw) {
-  // nmcli -t prints NAME:UUID:TYPE lines; names may contain ":" so split
-  // from the right (last two fields are UUID and TYPE).
+  // nmcli -t prints NAME:UUID:TYPE[:TIMESTAMP] lines; names may contain ":"
+  // so split from the right (UUID has no colons, TYPE none, TIMESTAMP digits).
+  // Three-field lines (no TIMESTAMP) are accepted with timestamp 0.
   var out = [];
   var lines = String(raw || "").split("\n");
   for (var i = 0; i < lines.length; i++) {
@@ -102,9 +106,17 @@ function parseConnectionList(raw) {
     if (line.trim() === "") continue;
     var parts = line.split(":");
     if (parts.length < 3) continue;
-    var type = parts.pop();
-    var uuid = parts.pop();
-    out.push({ name: parts.join(":"), uuid: uuid, type: type });
+    var entry = { name: "", uuid: "", type: "", timestamp: 0 };
+    var tail = parts[parts.length - 1];
+    if (/^\d+$/.test(tail) && parts.length >= 4) {
+      entry.timestamp = parseInt(tail, 10);
+      parts.pop();
+    }
+    entry.type = parts.pop();
+    entry.uuid = parts.pop();
+    entry.name = parts.join(":");
+    if (entry.uuid === "" || entry.type === "") continue;
+    out.push(entry);
   }
   return out;
 }
@@ -170,9 +182,52 @@ function settingsPick(settings) {
   return out;
 }
 
+// All matches for a name. NetworkManager permits duplicate names, and every
+// per-connection query by bare name is then ambiguous (nmcli may answer with
+// several profiles concatenated). Callers pin one UUID via resolveTarget and
+// use THAT for every subsequent operation.
+function findByName(list, name) {
+  var out = [];
+  var want = String(name || "");
+  for (var i = 0; i < (list || []).length; i++) {
+    if (list[i] && list[i].name === want) out.push(list[i]);
+  }
+  return out;
+}
+
+// Pick the single entry to manage: the active one wins, otherwise the most
+// recently used (highest TIMESTAMP). activeUuids are UUIDs from the --active
+// poll (names would be ambiguous exactly when this matters). Returns
+// { entry, duplicates } where entry is null when nothing matches.
+function resolveTarget(list, activeUuids, name) {
+  var matches = findByName(list, name);
+  if (matches.length === 0) return { entry: null, duplicates: false };
+  var pool = [];
+  for (var i = 0; i < matches.length; i++) {
+    if ((activeUuids || []).indexOf(matches[i].uuid) !== -1) pool.push(matches[i]);
+  }
+  if (pool.length === 0) pool = matches;
+  var best = pool[0];
+  for (var k = 1; k < pool.length; k++) {
+    if (Number(pool[k].timestamp || 0) > Number(best.timestamp || 0)) best = pool[k];
+  }
+  return { entry: best, duplicates: matches.length > 1 };
+}
+
 function stateFor(connectionName, activeNames, lastErrorKey) {
   if (!isValidConnectionName(connectionName)) return "missing";
   if ((activeNames || []).indexOf(connectionName) !== -1) return "connected";
+  if (lastErrorKey === "connecting") return "connecting";
+  if (lastErrorKey && lastErrorKey !== "") return "failed";
+  return "disconnected";
+}
+
+// UUID-pinned variant used by the live service: with duplicate names a
+// name-based "connected" check is ambiguous, so the service tracks the
+// resolved UUID and the active UUID set instead.
+function stateForUuid(hasTarget, uuid, activeUuids, lastErrorKey) {
+  if (!hasTarget) return "missing";
+  if ((activeUuids || []).indexOf(uuid) !== -1) return "connected";
   if (lastErrorKey === "connecting") return "connecting";
   if (lastErrorKey && lastErrorKey !== "") return "failed";
   return "disconnected";
@@ -243,6 +298,9 @@ if (typeof module !== "undefined" && module.exports) {
     hasPasswordFlags2: hasPasswordFlags2,
     settingsPick: settingsPick,
     stateFor: stateFor,
+    stateForUuid: stateForUuid,
+    findByName: findByName,
+    resolveTarget: resolveTarget,
     classifyError: classifyError,
     errorMessage: errorMessage,
     elideStatus: elideStatus
