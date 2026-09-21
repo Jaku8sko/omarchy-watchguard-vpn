@@ -37,6 +37,8 @@ Item {
   property string lastError: ""
   property string actionStatus: ""
   property bool refreshing: false
+  property int connectWatchdogTicks: 0
+  readonly property int connectWatchdogMaxTicks: 8
 
   readonly property int refreshIntervalSec: {
     var raw = settings && settings.refreshIntervalSec !== undefined ? settings.refreshIntervalSec : 5;
