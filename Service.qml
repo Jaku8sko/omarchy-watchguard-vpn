@@ -288,12 +288,22 @@ Item {
     interval: 8000
     repeat: true
     onTriggered: {
-      root.refreshActive()
       if (root.vpnState === "connected") {
         connectWatchdog.stop()
+        root.connectWatchdogTicks = 0
         root.lastErrorKey = ""
         root.actionStatus = ""
+        return
       }
+      root.connectWatchdogTicks++
+      if (root.connectWatchdogTicks >= root.connectWatchdogMaxTicks) {
+        connectWatchdog.stop()
+        root.fail("connection-timeout", "No active VPN connection appeared after 64 seconds.")
+        root.actionStatus = ""
+        root.updateState()
+        return
+      }
+      root.refreshActive()
     }
     onRunningChanged: if (!running) root.updateState()
   }
@@ -350,9 +360,10 @@ Item {
       if (listProc.mode === "post-import") {
         root.ingestList(out)
         var after = root.allConnections
-        var found = Vpn.detectImported(root._preImport, after)
         var viaStdout = Vpn.parseImportStdout(importProc.captured)
-        var pick = found ? found : viaStdout
+        var found = Vpn.detectImported(root._preImport, after)
+        // Prefer the UUID reported by nmcli import; inventory diff is fallback.
+        var pick = viaStdout ? viaStdout : found
         if (pick && pick.name !== "") {
           root.connectionName = pick.name
           root.connectionUuid = pick.uuid || ""
