@@ -132,6 +132,7 @@ Add to `~/.config/omarchy/extensions/omarchy-menu.jsonc` (see
 | OpenVPN support missing | Install via the panel button (`omarchy-pkg-add openvpn networkmanager-openvpn`). |
 | `.ovpn` won't import | File unreadable/invalid, or referenced certs/keys missing. Re-export from the Firebox. |
 | Auth fails, no push | Wrong password, or the account isn't AuthPoint-enabled. Passwords are never logged — check the Firebox logs. |
+| Connection attempt times out | The interactive terminal did not produce an active VPN connection within 64 seconds. Check its authentication/MFA output and try Connect again. |
 | Widget shows `VPN setup` | No profile adopted yet — import one, or set `connectionName` in the widget settings. |
 
 ## Tests
