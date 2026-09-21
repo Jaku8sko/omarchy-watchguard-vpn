@@ -212,6 +212,8 @@ Item {
 
   function connect() {
     if (connectionUuid === "") return
+    connectWatchdog.stop()
+    connectWatchdogTicks = 0
     clearError()
     lastErrorKey = "connecting"
     vpnState = "connecting"
@@ -225,6 +227,8 @@ Item {
   }
 
   function disconnect() {
+    connectWatchdog.stop()
+    connectWatchdogTicks = 0
     if (connectionUuid === "" || downProc.running) return
     clearError()
     actionStatus = "Disconnecting…"
