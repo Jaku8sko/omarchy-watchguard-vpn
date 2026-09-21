@@ -53,6 +53,32 @@ Validate any copy with:
 omarchy-plugin-validate ~/.config/omarchy/plugins/user-name.watchguard-vpn
 ```
 
+## Uninstall
+
+If you installed the plugin with Omarchy, disable it and remove the plugin directory:
+
+```bash
+omarchy plugin disable user-name.watchguard-vpn
+rm -rf ~/.config/omarchy/plugins/user-name.watchguard-vpn
+omarchy-shell shell rescanPlugins
+```
+
+If you installed it by hand, remove the same directory and rescan plugins:
+
+```bash
+rm -rf ~/.config/omarchy/plugins/user-name.watchguard-vpn
+omarchy-shell shell rescanPlugins
+```
+
+**Note:** uninstalling the plugin does not remove the NetworkManager VPN profile or the OpenVPN packages. To remove a VPN profile separately, use NetworkManager with its connection UUID or name:
+
+```bash
+nmcli connection show
+nmcli connection delete "<connection-name-or-uuid>"
+```
+
+Do not delete the VPN profile if you still want to use it outside the plugin. The plugin itself persists only its connection name in its settings.
+
 ## Import a WatchGuard `.ovpn` profile
 
 1. Open the panel (click the `VPN off` pill, or `omarchy-shell shell summon`
