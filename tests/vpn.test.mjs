@@ -54,8 +54,12 @@ group("detect imported connection");
   const found = Vpn.detectImported(before, after);
   t("finds the new UUID", found && found.name === "client");
   t("null when nothing new", Vpn.detectImported(before, before) === null);
-  t("name with colons survives terse parse",
+  t("list argv disables nmcli terse escaping", Vpn.listArgv().includes("-e") && Vpn.listArgv().includes("no"));
+  t("active argv disables nmcli terse escaping", Vpn.activeArgv().includes("-e") && Vpn.activeArgv().includes("no"));
+  t("name with colons survives unescaped terse parse",
     Vpn.parseConnectionList("my:weird:name:uuid-3:vpn")[0].name === "my:weird:name");
+  t("backslash in name survives unescaped terse parse",
+    Vpn.parseConnectionList("my\\vpn:uuid-4:vpn")[0].name === "my\\vpn");
   const parsed = Vpn.parseImportStdout("Connection 'client' (ca0cccae-60bd-4ee7-ba76-67d1cf65ba51) successfully added.\n");
   t("stdout parse yields name+uuid", parsed && parsed.name === "client");
   t("stdout parse null on garbage", Vpn.parseImportStdout("nope") === null);
@@ -119,6 +123,7 @@ group("errors");
   t("not found", Vpn.classifyError("Error: Unknown connection: client.", 10) === "not-found");
   t("import failure", Vpn.classifyError("Error: failed to import file: No such file", 4) === "import-failed");
   t("message for secrets guides to flags", Vpn.errorMessage("no-valid-secrets").includes("password-flags=2"));
+  t("connection timeout is actionable", Vpn.errorMessage("connection-timeout").includes("64 seconds"));
   t("message never contains a password", !/password[:=]\s*\S{3,}/i.test(Vpn.errorMessage("auth-failed") + Vpn.errorMessage("failed")));
   t("state connected", Vpn.stateFor("client", ["client"], "") === "connected");
   t("state disconnected", Vpn.stateFor("client", [], "") === "disconnected");

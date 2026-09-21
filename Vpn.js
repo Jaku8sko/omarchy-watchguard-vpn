@@ -64,11 +64,11 @@ function listArgv() {
   // TIMESTAMP lets resolveTarget prefer the most recently used profile when
   // several share one name. nmcli -t separates fields with ":"; names may
   // contain ":" so parseConnectionList splits from the right.
-  return ["nmcli", "-t", "-f", "NAME,UUID,TYPE,TIMESTAMP", "connection", "show"];
+  return ["nmcli", "-t", "-e", "no", "-f", "NAME,UUID,TYPE,TIMESTAMP", "connection", "show"];
 }
 
 function activeArgv() {
-  return ["nmcli", "-t", "-f", "NAME,UUID,TYPE,TIMESTAMP", "connection", "show", "--active"];
+  return ["nmcli", "-t", "-e", "no", "-f", "NAME,UUID,TYPE,TIMESTAMP", "connection", "show", "--active"];
 }
 
 function downArgv(connection) {
@@ -96,8 +96,8 @@ function connectTerminalArgv(connection) {
 // --- parsers ---
 
 function parseConnectionList(raw) {
-  // nmcli -t prints NAME:UUID:TYPE[:TIMESTAMP] lines; names may contain ":"
-  // so split from the right (UUID has no colons, TYPE none, TIMESTAMP digits).
+  // `-e no` disables nmcli's terse escaping. UUID/type/timestamp contain no
+  // colons, so split from the right and preserve colons in NAME.
   // Three-field lines (no TIMESTAMP) are accepted with timestamp 0.
   var out = [];
   var lines = String(raw || "").split("\n");
@@ -256,6 +256,7 @@ var ERROR_MESSAGES = {
   "plugin-missing": "NetworkManager OpenVPN support is missing. Install “openvpn” and “networkmanager-openvpn”.",
   "auth-failed": "Authentication failed. Check username/password, then approve the AuthPoint push. No passwords were stored or logged.",
   "import-failed": "Import failed. Check the .ovpn file is readable, valid, and its referenced certificates/keys exist.",
+  "connection-timeout": "Connection did not become active within 64 seconds. Check the terminal for authentication/MFA errors and try again.",
   "failed": "Operation failed. See details, without any passwords, in the panel log line."
 };
 
