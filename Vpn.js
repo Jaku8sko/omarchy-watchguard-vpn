@@ -92,6 +92,7 @@ var ERROR_MESSAGES={
  "plugin-missing":"NetworkManager OpenVPN support is missing. Install “openvpn” and “networkmanager-openvpn”.",
  "auth-failed":"Authentication failed. Check username/password, then approve the AuthPoint push. No passwords were stored or logged.",
  "import-failed":"Import failed. Check the .ovpn file is readable, valid, and its referenced certificates/keys exist.",
+ "connection-timeout":"Connection did not become active within 64 seconds. Check the terminal for authentication/MFA errors and try again.",
  "failed":"Operation failed. See details, without any passwords, in the panel log line."
 };
 function errorMessage(key){return ERROR_MESSAGES[String(key||"")]||"";}
